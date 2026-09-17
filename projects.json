@@ -2,7 +2,7 @@
   "owner": "newYurk",
   "site": "branches",
   "base": "/branches",
-  "blockHosts": ["hits.sh"],
+  "blockHosts": [],
   "projects": [
     {
       "repo": "temari",
@@ -48,15 +48,6 @@
         { "path": "docs/overview.html", "label": "обзор" }
       ],
       "quiet": ["**/*.md", "review/**", "mockups/**", ".claude/**", ".gitignore"]
-    },
-    {
-      "repo": "night-skip",
-      "title": "Лягушка",
-      "tagline": "овечка по ночному морю",
-      "live": "https://newyurk.github.io/night-skip/",
-      "build": { "copy": true },
-      "entries": [{ "path": "", "label": "игра" }],
-      "quiet": ["**/*.md", "review-findings.json", ".gitignore"]
     }
   ]
 }

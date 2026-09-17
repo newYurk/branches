@@ -6,12 +6,14 @@
 //   - keeps the branch's localStorage writes under its own prefix, so a preview
 //     can never overwrite the saves of the game served from main (reads fall
 //     through to main's values, so the preview starts from your real progress);
-//   - drops requests to counters (hits.sh), so previews do not count as players;
+//   - drops requests to the counter hosts listed in projects.json (blockHosts), so previews
+//     do not count as players;
 //   - shows a small "⎇ branch · sha" label and marks the tab title.
 // Links to the game's own live address and to its files at main are pointed at the branch.
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { urlBranch } from './plan.mjs'
 
 const [dir, repo, branch, sha, path] = process.argv.slice(2)
 if (!path) {
@@ -59,23 +61,64 @@ const SHIM = `<script data-branch-preview>(function () {
     P.setItem = function (k, v) {
       return mine(this) ? set.call(this, NS + String(k), String(v)) : set.call(this, k, v);
     };
+    // Native removeItem never throws; a tombstone write could, when the shared 5 MB is full.
+    var drop = function (s, k) {
+      if (get.call(s, k) === null) return del.call(s, NS + k);
+      try { set.call(s, NS + k, GONE); } catch (e) {
+        del.call(s, NS + k);
+        try { set.call(s, NS + k, GONE); } catch (e2) {}
+      }
+    };
     P.removeItem = function (k) {
-      return mine(this) ? set.call(this, NS + String(k), GONE) : del.call(this, k);
+      return mine(this) ? drop(this, String(k)) : del.call(this, k);
     };
     P.key = function (i) {
       if (!mine(this)) return key.call(this, i);
       var all = visible(this);
+      i = Math.floor(Number(i)) || 0;
       return i >= 0 && i < all.length ? all[i] : null;
     };
     P.clear = function () {
       if (!mine(this)) return clear.call(this);
       var all = visible(this);
-      for (var i = 0; i < all.length; i++) set.call(this, NS + all[i], GONE);
+      for (var i = 0; i < all.length; i++) drop(this, all[i]);
     };
     Object.defineProperty(P, 'length', {
       configurable: true,
       get: function () { return mine(this) ? visible(this).length : len.call(this); },
     });
+
+    // localStorage.x = 1, localStorage[k], delete, Object.keys(localStorage): same rules.
+    var named = function (k) { return typeof k === 'string' && !(k in P); };
+    var proxy = new Proxy(ls, {
+      get: function (t, k) {
+        if (!named(k)) {
+          var v = Reflect.get(t, k, t);
+          return typeof v === 'function' ? v.bind(t) : v;
+        }
+        var got = P.getItem.call(t, k);
+        return got === null ? undefined : got;
+      },
+      set: function (t, k, v) {
+        if (named(k)) P.setItem.call(t, k, v);
+        return true;
+      },
+      has: function (t, k) { return named(k) ? P.getItem.call(t, k) !== null : k in t; },
+      deleteProperty: function (t, k) {
+        if (named(k)) P.removeItem.call(t, k);
+        return true;
+      },
+      ownKeys: function (t) { return visible(t); },
+      getOwnPropertyDescriptor: function (t, k) {
+        var got = named(k) ? P.getItem.call(t, k) : null;
+        return got === null ? undefined : { value: got, writable: true, enumerable: true, configurable: true };
+      },
+      defineProperty: function (t, k, d) {
+        if (named(k) && 'value' in d) P.setItem.call(t, k, d.value);
+        return true;
+      },
+    });
+    Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, get: function () { return proxy; } });
   } catch (e) {}
 
   var blocked = function (url) {
@@ -125,17 +168,20 @@ const SHIM = `<script data-branch-preview>(function () {
 
 function inject(html) {
   if (html.includes('data-branch-preview')) return html
-  // After <meta charset> when it opens the head, otherwise right after <head>, otherwise at the top.
-  const charset = /<meta\s+charset=[^>]*>/i.exec(html)
-  const head = /<head(\s[^>]*)?>/i.exec(html)
-  const firstScript = /<script[\s>]/i.exec(html)
+  // Search a copy with comments blanked out (same length, so positions still match).
+  const bare = html.replace(/<!--[\s\S]*?-->/g, (c) => ' '.repeat(c.length))
+  const charset = /<meta\s+charset=[^>]*>/i.exec(bare)
+  const head = /<head(\s[^>]*)?>/i.exec(bare)
+  const firstScript = /<script[\s>]/i.exec(bare)
   let at
-  if (charset && (!firstScript || charset.index < firstScript.index)) at = charset.index + charset[0].length
+  if (charset) at = charset.index + charset[0].length
   else if (head) at = head.index + head[0].length
   else {
-    const doctype = /<!doctype[^>]*>/i.exec(html)
+    const doctype = /<!doctype[^>]*>/i.exec(bare)
     at = doctype ? doctype.index + doctype[0].length : 0
   }
+  // Never after a script of the page itself.
+  if (firstScript && firstScript.index < at) at = firstScript.index
   return html.slice(0, at) + '\n' + SHIM + html.slice(at)
 }
 
@@ -143,11 +189,12 @@ function inject(html) {
 // docs on GitHub at main. Inside a preview both should stay on the branch.
 const host = `${config.owner.toLowerCase()}.github.io`
 const liveRe = new RegExp(`(https?:)?//${host.replace(/\./g, '\\.')}/${repo}/`, 'gi')
+const branchInUrl = urlBranch(branch).replace(/'/g, '%27')
 const blobRe = new RegExp(`(github\\.com/${config.owner}/${repo}/(?:blob|tree))/main/`, 'gi')
 function rewrite(html) {
   return html
     .replace(liveRe, (_, scheme) => `${scheme ?? ''}//${host}${config.base}/${path}/`)
-    .replace(blobRe, (_, prefix) => `${prefix}/${branch}/`)
+    .replace(blobRe, (_, prefix) => `${prefix}/${branchInUrl}/`)
 }
 
 function* htmlFiles(d) {

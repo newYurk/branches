@@ -16,10 +16,11 @@ on:
 permissions:
   contents: read
 
-# One run at a time; a newer run waits and sees what the older one published.
+# One run at a time; newer runs wait in order and each sees what the older ones published.
 concurrency:
   group: publish
   cancel-in-progress: false
+  queue: max
 
 jobs:
   check:
@@ -30,14 +31,25 @@ jobs:
       actions: write
     outputs:
       changed: ${{ steps.seen.outputs.cache-hit != 'true' || inputs.force == true }}
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # Branch heads of every game (git ls-remote, no API) plus a hash of this builder.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      # Branch heads and open PRs of every game plus a hash of this builder.
       - id: heads
-        run: echo "fingerprint=$(node tools/plan.mjs heads)" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          fp=$(node tools/plan.mjs heads)
+          test -n "$fp"
+          echo "fingerprint=$fp" >> "$GITHUB_OUTPUT"
 
       # A cache entry named after the fingerprint marks "this exact state is already live".
       - id: seen
@@ -48,11 +60,12 @@ jobs:
           lookup-only: true
 
       # Revives the five-minute watcher if GitHub switched it off for inactivity.
-      - name: keep watch.yml on
+      - name: watcher is on
         continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow enable watch.yml -R "$GITHUB_REPOSITORY"
+        run: |
+          state=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/watch.yml" --jq '.state')
+          echo "watch.yml: $state"
+          if [ "$state" != active ]; then gh workflow enable watch.yml -R "$GITHUB_REPOSITORY"; fi
 
   publish:
     needs: check
@@ -84,7 +97,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           node tools/plan.mjs full
-          echo "fingerprint=$(node -p 'require("./plan.json").fingerprint')" >> "$GITHUB_OUTPUT"
+          fp=$(node -p 'require("./plan.json").fingerprint')
+          test -n "$fp"
+          echo "fingerprint=$fp" >> "$GITHUB_OUTPUT"
 
       - name: build every branch
         run: node tools/build.mjs plan.json _site status.json
@@ -98,25 +113,45 @@ jobs:
 
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
-      # "Deployed" is not the same as "served": wait until the site hands out this plan.
+      # "Deployed" is not the same as "served": wait until the site hands out this run's plan.
+      # Pages caches for up to 10 minutes, so wait a little longer than that.
       - name: site serves this build
-        env:
-          WANT: ${{ steps.plan.outputs.fingerprint }}
         run: |
-          for i in $(seq 1 36); do
-            live=$(curl -fsS "https://newyurk.github.io/branches/plan.json?run=$GITHUB_RUN_ID-$i" \
-              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).fingerprint))' \
+          for i in $(seq 1 72); do
+            live=$(curl -fsS --max-time 15 "https://newyurk.github.io/branches/plan.json?run=$GITHUB_RUN_ID-$i" \
+              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).runId))' \
               2>/dev/null || true)
-            if [ "$live" = "$WANT" ]; then echo "live: $live"; exit 0; fi
+            if [ "$live" = "$GITHUB_RUN_ID" ]; then echo "live after ~$((i * 10)) s"; exit 0; fi
             sleep 10
           done
-          echo "::error::deploy reported success, but the site still serves '${live}' instead of '${WANT}'"
+          echo "::error::deploy reported success, but the site still serves run '${live}', not $GITHUB_RUN_ID"
           exit 1
 
-      - name: remember what is live
-        run: mkdir -p .published && echo "${{ steps.plan.outputs.fingerprint }}" > .published/fingerprint
+      # A branch that failed to build gets one more try on the next watch (a network hiccup
+      # fixes itself); after that the state counts as published until something moves.
+      - name: did every branch build
+        id: outcome
+        run: echo "all_ok=$(node -p 'Object.values(require("./status.json")).every((s) => s.ok)')" >> "$GITHUB_OUTPUT"
+
+      - id: retried
+        if: steps.outcome.outputs.all_ok != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .published
+          key: retried-${{ steps.plan.outputs.fingerprint }}
+          lookup-only: true
+
+      - name: marker
+        id: marker
+        run: |
+          mkdir -p .published && echo "${{ steps.plan.outputs.fingerprint }}" > .published/fingerprint
+          if [ "${{ steps.outcome.outputs.all_ok }}" = true ] || [ "${{ steps.retried.outputs.cache-hit }}" = true ]; then
+            echo "key=published-${{ steps.plan.outputs.fingerprint }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "key=retried-${{ steps.plan.outputs.fingerprint }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .published
-          key: published-${{ steps.plan.outputs.fingerprint }}
+          key: ${{ steps.marker.outputs.key }}

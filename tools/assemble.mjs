@@ -20,7 +20,7 @@ const STALE_MINUTES = 20
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
-const statusOf = (branch) => statuses[branch.path] ?? { ok: false, gate: null, log: runUrl }
+const statusOf = (branch) => statuses[branch.path] ?? { ok: false, gate: null, reason: null, log: runUrl }
 
 function entriesFor(project, branch) {
   const cfg = config.projects.find((p) => p.repo === project.repo)
@@ -30,14 +30,21 @@ function entriesFor(project, branch) {
   })
 }
 
-const CHANGED = { docs: 'только доки — игра как в main', same: 'совпадает с main' }
+// What a reader should know about the game in this preview compared with main.
+function compared(b, main) {
+  const older = b.behind ? `, а ${main} с тех пор ушла вперёд — игра в превью старее` : ''
+  if (b.changed === 'merged') return b.behind ? `всё из ветки уже в ${main}${older}` : `совпадает с ${main}`
+  if (b.changed === 'docs') return b.behind ? `только доки${older}` : `только доки — игра как в ${main}`
+  if (b.changed === 'same') return b.behind ? `итог правок пуст${older}` : `совпадает с ${main}`
+  return null
+}
 
 function renderBranch(project, b) {
   const status = statusOf(b)
   const entries = status.ok ? entriesFor(project, b) : []
   const href = entries.length ? `./${b.path}/${entries[0].path}` : null
   const meta = [
-    `<time datetime="${esc(b.committedAt)}">${esc(b.committedAt.slice(0, 16).replace('T', ' '))}</time>`,
+    b.committedAt ? `<time datetime="${esc(b.committedAt)}">${esc(b.committedAt.slice(0, 16).replace('T', ' '))}</time>` : null,
     b.ahead ? `+${b.ahead} к ${esc(project.defaultBranch)}` : null,
     b.behind ? `отстаёт на ${b.behind}` : null,
     b.pr ? `<a href="${esc(b.pr.url)}">PR #${b.pr.number}${b.pr.draft ? ' · черновик' : ''}</a>` : null,
@@ -45,17 +52,21 @@ function renderBranch(project, b) {
   ].filter(Boolean)
 
   const notes = []
-  if (!status.ok) notes.push(`<span class="note bad">сборка не удалась — <a href="${esc(status.log)}">лог</a></span>`)
+  const main = esc(project.defaultBranch)
+  if (!status.ok)
+    notes.push(`<span class="note bad">превью нет${status.reason ? ` (${esc(status.reason)})` : ''} — <a href="${esc(status.log)}">лог</a></span>`)
   if (status.gate === 'fail')
-    notes.push(`<span class="note bad">проверки, которые стоят перед выкладкой main, не прошли — <a href="${esc(status.log)}">лог</a></span>`)
-  if (CHANGED[b.changed]) notes.push(`<span class="note">${CHANGED[b.changed]}</span>`)
+    notes.push(`<span class="note bad">проверки, которые стоят перед выкладкой ${main}, не прошли — <a href="${esc(status.log)}">лог</a></span>`)
+  if (b.note) notes.push(`<span class="note">${esc(b.note)}</span>`)
+  const vsMain = compared(b, main)
+  if (vsMain) notes.push(`<span class="note">${vsMain}</span>`)
 
   const more = entries.length > 1 ? entries.map((e) => `<a href="./${esc(b.path)}/${esc(e.path)}">${esc(e.label)}</a>`) : []
 
   return `
       <li class="branch${b.changed === 'game' ? '' : ' quiet'}" data-repo="${esc(project.repo)}" data-branch="${esc(b.branch)}" data-sha="${esc(b.sha)}" data-path="${esc(b.path)}">
         ${href ? `<a class="name" href="${esc(href)}">${esc(b.branch)}</a>` : `<span class="name">${esc(b.branch)}</span>`}
-        <p class="subject">${esc(b.subject.replace(`[${b.branch}] `, ''))}</p>
+        ${b.subject ? `<p class="subject">${esc(b.subject.replace(`[${b.branch}] `, ''))}</p>` : ''}
         <p class="meta">${meta.join('<span class="dot">·</span>')}</p>
         ${more.length ? `<p class="more">${more.join('')}</p>` : ''}
         ${notes.length ? `<p class="notes">${notes.join('')}</p>` : ''}
@@ -68,7 +79,7 @@ function renderProject(p) {
   return `
     <section class="project${idle ? ' idle' : ''}" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
       <h2><span>${esc(p.title)}</span> <a class="main" href="${esc(p.live)}">${esc(p.defaultBranch)} ↗</a></h2>
-      <p class="tagline">${idle ? 'других веток нет' : esc(p.tagline)}</p>
+      <p class="tagline${p.error ? ' bad' : ''}">${p.error ? 'репозиторий сейчас не прочитать — его превью убраны' : idle ? 'других веток нет' : esc(p.tagline)}</p>
       <ul>${p.branches.map((b) => renderBranch(p, b)).join('')}
       </ul>
     </section>`
@@ -158,7 +169,7 @@ const html = `<!DOCTYPE html>
       .dot { margin: 0 0.4em; }
       .more a { margin-right: 1em; }
       .note { display: inline-block; margin-right: 0.8em; }
-      .note.bad, .live.bad { color: var(--rust); }
+      .note.bad, .live.bad, .tagline.bad { color: var(--rust); }
       .live.fresh { color: var(--moss); }
       .quiet .name, .quiet .subject { color: var(--stone); }
       .empty { margin-top: 2.2rem; color: var(--stone); font-size: 0.9rem; }
@@ -184,6 +195,7 @@ ${[...active, ...idle].map(renderProject).join('\n')}
     </main>
     <script type="module">
       const OWNER = ${JSON.stringify(config.owner)}
+      const api = (path) => fetch(\`https://api.github.com\${path}\`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       ${pathFor}
       const rtf = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' })
       function ago(iso) {
@@ -199,28 +211,30 @@ ${[...active, ...idle].map(renderProject).join('\n')}
       // Once a branch is gone from GitHub its saves are dead weight in the shared 5 MB.
       const alive = new Set([...document.querySelectorAll('.branch')].map((li) => li.dataset.path))
       const checked = new Set()
-      let lagging = false
+      const lagging = []
 
       // Built pages lag behind pushes by a few minutes; say so instead of pretending.
       for (const section of document.querySelectorAll('.project')) {
         const repo = section.dataset.repo
-        let heads
+        const heads = new Map()
         try {
-          const res = await fetch(\`https://api.github.com/repos/\${OWNER}/\${repo}/branches?per_page=100\`)
-          if (!res.ok) continue
-          heads = new Map((await res.json()).map((b) => [b.name, b.commit.sha]))
+          for (let page = 1; page <= 5; page++) {
+            const list = await api(\`/repos/\${OWNER}/\${repo}/branches?per_page=100&page=\${page}\`)
+            for (const b of list) heads.set(b.name, b.commit.sha)
+            if (list.length < 100) break
+          }
         } catch {
           continue
         }
         checked.add(repo)
-        for (const name of heads.keys()) alive.add(pathFor(repo, name))
+        for (const name of heads.keys()) alive.add(await pathFor(repo, name))
         const shown = new Set()
         for (const li of section.querySelectorAll('.branch')) {
           shown.add(li.dataset.branch)
           const live = li.querySelector('.live')
           const sha = heads.get(li.dataset.branch)
           if (!sha) Object.assign(live, { hidden: false, className: 'live bad', textContent: 'ветку уже удалили' })
-          else if (sha !== li.dataset.sha && (lagging = true))
+          else if (sha !== li.dataset.sha && lagging.push([repo, li.dataset.branch]))
             Object.assign(live, { hidden: false, className: 'live fresh', textContent: \`есть новые коммиты (\${sha.slice(0, 7)}) — превью догонит через несколько минут\` })
         }
         for (const name of heads.keys()) {
@@ -230,11 +244,21 @@ ${[...active, ...idle].map(renderProject).join('\n')}
           li.innerHTML = '<span class="name"></span><p class="live fresh">новая ветка — превью готовится</p>'
           li.querySelector('.name').textContent = name
           section.querySelector('ul').append(li)
-          lagging = true
+          lagging.push([repo, name])
         }
       }
-      const built = new Date(document.getElementById('built').dateTime)
-      if (lagging && Date.now() - built > ${STALE_MINUTES} * 60e3) document.getElementById('stale').hidden = false
+
+      // The watcher is stuck if a push is older than ${STALE_MINUTES} minutes and still not built.
+      // The push time comes from the repository activity feed, not from the commit date.
+      for (const [repo, name] of lagging.slice(0, 5)) {
+        try {
+          const [push] = await api(\`/repos/\${OWNER}/\${repo}/activity?ref=\${encodeURIComponent('refs/heads/' + name)}&per_page=1\`)
+          if (push && Date.now() - new Date(push.timestamp) > ${STALE_MINUTES} * 60e3) {
+            document.getElementById('stale').hidden = false
+            break
+          }
+        } catch {}
+      }
       try {
         for (const key of Object.keys(localStorage)) {
           const m = /^branch:(.+?):/.exec(key)
@@ -247,6 +271,7 @@ ${[...active, ...idle].map(renderProject).join('\n')}
 `
 
 cpSync(new URL('../site/', import.meta.url), siteDir, { recursive: true })
-writeFileSync(join(siteDir, 'plan.json'), JSON.stringify({ ...plan, statuses }, null, 2))
+// runId lets publish.yml tell this deploy from the previous one even when nothing else changed.
+writeFileSync(join(siteDir, 'plan.json'), JSON.stringify({ ...plan, runId: process.env.GITHUB_RUN_ID ?? null, statuses }, null, 2))
 writeFileSync(join(siteDir, 'index.html'), html)
 console.error(`index: ${active.length} project(s) with branches, ${idle.length} idle`)

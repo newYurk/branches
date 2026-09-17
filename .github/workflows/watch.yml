@@ -1,6 +1,6 @@
 name: watch
 
-# Every five minutes: did any branch of the games move? If so, ask publish.yml to run.
+# Every five minutes: did any branch or PR of the games change? If so, ask publish.yml to run.
 #
 # Why not publish from here directly: deploy-pages reports the commit it deploys, and every
 # scheduled run of this repo carries the same one; such repeated deploys have been seen to
@@ -8,14 +8,13 @@ name: watch
 #
 # Why a separate file: GitHub disables a public repo's scheduled workflow after 60 days
 # without activity, and it disables the whole file. publish.yml keeps working by hand and
-# switches this watcher back on every time it runs.
+# switches this watcher back on; the keepalive step below avoids getting there at all.
 on:
   schedule:
-    - cron: '2-59/5 * * * *'
+    - cron: '2/5 * * * *'
 
 permissions:
   contents: read
-  actions: write
 
 concurrency:
   group: watch
@@ -25,13 +24,27 @@ jobs:
   watch:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write # keepalive commit only
+      actions: write # start publish.yml
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
       - id: heads
-        run: echo "fingerprint=$(node tools/plan.mjs heads)" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          fp=$(node tools/plan.mjs heads)
+          test -n "$fp"
+          echo "fingerprint=$fp" >> "$GITHUB_OUTPUT"
 
       - id: seen
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -42,8 +55,6 @@ jobs:
 
       - name: ask publish to run
         if: steps.seen.outputs.cache-hit != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           # One queued or running publish is enough; the next watch will catch whatever it missed.
           busy=$(gh run list -R "$GITHUB_REPOSITORY" -w publish.yml --limit 20 --json status \
@@ -53,3 +64,18 @@ jobs:
           else
             echo "publish already in flight ($busy run)"
           fi
+
+      # An empty commit when this repo has been quiet for 45 days: commits are what GitHub
+      # counts as activity. Made through the API, so no credentials stay on the runner, and a
+      # GITHUB_TOKEN push does not start publish.yml.
+      - name: keepalive
+        run: |
+          last=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.commit.committer.date')
+          age=$(( $(date +%s) - $(date -d "$last" +%s) ))
+          if [ "$age" -lt $((45 * 86400)) ]; then exit 0; fi
+          parent=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')
+          tree=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.commit.tree.sha')
+          commit=$(gh api "repos/$GITHUB_REPOSITORY/git/commits" -f message='Keep the branch watcher alive' \
+            -f tree="$tree" -f "parents[]=$parent" --jq '.sha')
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/main" -f sha="$commit" > /dev/null
+          echo "keepalive commit $commit"
