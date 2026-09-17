@@ -1,0 +1,62 @@
+{
+  "owner": "newYurk",
+  "site": "branches",
+  "base": "/branches",
+  "blockHosts": ["hits.sh"],
+  "projects": [
+    {
+      "repo": "temari",
+      "title": "Темари",
+      "tagline": "нить на сфере",
+      "live": "https://newyurk.github.io/temari/",
+      "build": {
+        "install": ["npm ci --no-audit --no-fund"],
+        "gate": ["npm test", "npm run typecheck", "node scripts/sync-design.mjs --check"],
+        "run": ["npm run build"],
+        "out": "dist"
+      },
+      "entries": [
+        { "path": "", "label": "мастерская" },
+        { "path": "lab.html", "label": "лаборатория" },
+        { "path": "design.html", "label": "как устроено" }
+      ],
+      "quiet": ["**/*.md", "docs/**", "reviews/**", "spec/**", ".github/**", ".claude/**"]
+    },
+    {
+      "repo": "rollery",
+      "title": "Ролльня",
+      "tagline": "лист → спираль → срез",
+      "live": "https://newyurk.github.io/rollery/",
+      "build": { "copy": true },
+      "entries": [
+        { "path": "play/", "label": "играть" },
+        { "path": "play/core-v2/", "label": "срез V2" },
+        { "path": "", "label": "прихожая" },
+        { "path": "docs/", "label": "документы" }
+      ],
+      "quiet": ["**/*.md", "sim/**", "tools/**", ".github/**", ".claude/**", ".gitignore"]
+    },
+    {
+      "repo": "roti-stand",
+      "title": "Ротишница",
+      "tagline": "стойка роти",
+      "live": "https://newyurk.github.io/roti-stand/",
+      "build": { "copy": true },
+      "entries": [
+        { "path": "prototype/dough-closeup/", "label": "стенд теста" },
+        { "path": "", "label": "прихожая" },
+        { "path": "docs/overview.html", "label": "обзор" }
+      ],
+      "quiet": ["**/*.md", "review/**", "mockups/**", ".claude/**", ".gitignore"]
+    },
+    {
+      "repo": "night-skip",
+      "title": "Лягушка",
+      "tagline": "овечка по ночному морю",
+      "live": "https://newyurk.github.io/night-skip/",
+      "build": { "copy": true },
+      "entries": [{ "path": "", "label": "игра" }],
+      "quiet": ["**/*.md", "review-findings.json", ".gitignore"]
+    }
+  ]
+}

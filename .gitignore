@@ -1,0 +1,9 @@
+.DS_Store
+# local runs of the builder
+_site/
+work/
+plan.json
+matrix.json
+status.json
+.published/
+runs/

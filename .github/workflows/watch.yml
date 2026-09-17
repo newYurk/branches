@@ -1,0 +1,55 @@
+name: watch
+
+# Every five minutes: did any branch of the games move? If so, ask publish.yml to run.
+#
+# Why not publish from here directly: deploy-pages reports the commit it deploys, and every
+# scheduled run of this repo carries the same one; such repeated deploys have been seen to
+# "succeed" without changing the site (actions/deploy-pages#383). Dispatched runs update it.
+#
+# Why a separate file: GitHub disables a public repo's scheduled workflow after 60 days
+# without activity, and it disables the whole file. publish.yml keeps working by hand and
+# switches this watcher back on every time it runs.
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: watch
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: heads
+        run: echo "fingerprint=$(node tools/plan.mjs heads)" >> "$GITHUB_OUTPUT"
+
+      - id: seen
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .published
+          key: published-${{ steps.heads.outputs.fingerprint }}
+          lookup-only: true
+
+      - name: ask publish to run
+        if: steps.seen.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # One queued or running publish is enough; the next watch will catch whatever it missed.
+          busy=$(gh run list -R "$GITHUB_REPOSITORY" -w publish.yml --limit 20 --json status \
+            -q '[.[] | select(.status != "completed")] | length')
+          if [ "$busy" = 0 ]; then
+            gh workflow run publish.yml -R "$GITHUB_REPOSITORY" --ref main
+          else
+            echo "publish already in flight ($busy run)"
+          fi
