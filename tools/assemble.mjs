@@ -188,7 +188,7 @@ ${active.length ? '' : '      <p class="empty">Сейчас ни одной ве
 ${[...active, ...idle].map(renderProject).join('\n')}
       <footer>
         Собрано <time id="built" datetime="${esc(plan.generatedAt)}">${esc(plan.generatedAt.slice(0, 16).replace('T', ' '))} UTC</time>.
-        Проверка новых коммитов — раз в несколько минут; <a href="${esc(workflowUrl)}">обновить сейчас</a>.<br />
+        Превью обновляется через пару минут после push; если отстаёт — <a href="${esc(workflowUrl)}">обновить сейчас</a>.<br />
         Ветки, которые не запушены на GitHub, здесь не видны.
         <span id="stale" class="note bad" hidden><br />Новые коммиты ждут дольше ${STALE_MINUTES} минут — похоже, автопроверка стоит. <a href="${esc(workflowUrl)}">Запустить publish вручную</a>.</span>
       </footer>

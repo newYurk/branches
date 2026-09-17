@@ -10,7 +10,14 @@
 
 ## Как это работает
 
-Два workflow:
+Главный путь — **push в игре**. В `main` каждой игры лежит `.github/workflows/branch-preview.yml`: после
+push или удаления ветки он запускает здесь `publish.yml` (секрет `BRANCHES_DISPATCH_TOKEN` в игре —
+fine-grained токен только на `newYurk/branches` с правом Actions: read and write). Превью появляется
+примерно через 2 минуты. GitHub берёт этот workflow из самой ветки, поэтому ветки, отведённые от `main`
+раньше 17.09.2026, начнут так работать после слияния со свежим `main`. Без секрета или с протухшим
+токеном workflow остаётся зелёным (только предупреждение) — остаются запасные пути ниже.
+
+Запасной путь — два workflow здесь:
 
 - `watch.yml` — раз в пять минут (расписание GitHub запаздывает, бывает и на 10–15 минут)
   `node tools/plan.mjs heads` снимает головы всех веток (`git ls-remote`) и открытые PR и хеширует их
@@ -63,6 +70,10 @@
 
 ## Руками
 
+- Токен протух: создать новый (fine-grained, только `newYurk/branches`, Actions: read and write) и
+  положить в три игры:
+  `read -rs "T?Токен: " && for r in temari rollery roti-stand; do printf %s "$T" | gh secret set BRANCHES_DISPATCH_TOKEN -R newYurk/$r; done; unset T`
+- Новая игра: скопировать `branch-preview.yml` в её `main` и положить тот же секрет.
 - Обновить сейчас: Actions → publish → Run workflow (галочка «пересобрать» — даже без изменений).
   Это же возвращает к жизни `watch.yml`, если GitHub его выключил.
 - Добавить игру: запись в `projects.json` (`repo`, `title`, `live`, `build`, `entries`, `quiet`).
