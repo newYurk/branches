@@ -71,7 +71,7 @@ jobs:
     needs: check
     if: needs.check.outputs.changed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       pages: write
@@ -101,8 +101,22 @@ jobs:
           test -n "$fp"
           echo "fingerprint=$fp" >> "$GITHUB_OUTPUT"
 
+      # Gate results per commit from earlier runs (each run saves a new entry; the newest wins).
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .gates
+          key: gates-${{ github.run_id }}
+          restore-keys: gates-
+
       - name: build every branch
-        run: node tools/build.mjs plan.json _site status.json
+        run: |
+          mkdir -p .gates
+          node tools/build.mjs plan.json _site status.json .gates/gates.json
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .gates
+          key: gates-${{ github.run_id }}
 
       - name: listing
         run: node tools/assemble.mjs plan.json _site status.json
@@ -131,7 +145,7 @@ jobs:
       # fixes itself); after that the state counts as published until something moves.
       - name: did every branch build
         id: outcome
-        run: echo "all_ok=$(node -p 'Object.values(require("./status.json")).every((s) => s.ok)')" >> "$GITHUB_OUTPUT"
+        run: echo "all_ok=$(node -p 'Object.values(require("./status.json")).every((s) => s.ok && s.gate !== "later")')" >> "$GITHUB_OUTPUT"
 
       - id: retried
         if: steps.outcome.outputs.all_ok != 'true'

@@ -7,3 +7,4 @@ matrix.json
 status.json
 .published/
 runs/
+.gates/
