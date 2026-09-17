@@ -185,6 +185,18 @@ ${[...active, ...idle].map(renderProject).join('\n')}
     </main>
     <script type="module">
       const OWNER = ${JSON.stringify(config.owner)}
+      const BUILT_RUN = ${JSON.stringify(process.env.GITHUB_RUN_ID ?? null)}
+
+      // Pages lets the browser keep this page for 10 minutes; if a newer build is out, load it.
+      // A new query string skips the browser's copy. Once per build, so a slow CDN cannot loop us.
+      try {
+        const latest = await fetch('./plan.json', { cache: 'no-store' }).then((r) => r.json())
+        const once = 'branches-reloaded-' + latest.runId
+        if (BUILT_RUN && latest.runId && latest.runId !== BUILT_RUN && !sessionStorage.getItem(once)) {
+          sessionStorage.setItem(once, '1')
+          location.replace(location.pathname + '?v=' + latest.runId)
+        }
+      } catch {}
       const api = (path) => fetch(\`https://api.github.com\${path}\`).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       ${pathFor}
       const rtf = new Intl.RelativeTimeFormat('ru', { numeric: 'auto' })

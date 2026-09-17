@@ -24,7 +24,7 @@ const config = JSON.parse(readFileSync(new URL('../projects.json', import.meta.u
 const project = config.projects.find((p) => p.repo === repo) ?? {}
 const block = [...(config.blockHosts ?? []), ...(project.blockHosts ?? [])]
 
-const data = JSON.stringify({ repo, branch, sha, path, block }).replace(/</g, '\\u003c')
+const data = JSON.stringify({ repo, branch, sha, path, block, base: config.base }).replace(/</g, '\\u003c')
 
 // Kept dependency-free and ES2015 so it runs before anything the page loads.
 const SHIM = `<script data-branch-preview>(function () {
@@ -142,6 +142,7 @@ const SHIM = `<script data-branch-preview>(function () {
     if (beacon) navigator.sendBeacon = function (url) { return blocked(url) ? true : beacon.apply(null, arguments); };
   } catch (e) {}
 
+  var stale = false;
   var label = function () {
     if (!document.body || document.querySelector('branch-preview-label')) return;
     var el = document.createElement('branch-preview-label');
@@ -156,9 +157,33 @@ const SHIM = `<script data-branch-preview>(function () {
     if (document.title.indexOf('\\u2387') !== 0) document.title = '\\u2387 ' + document.title;
     // Games use the top of the screen too: after a few seconds only a faint glyph stays.
     setTimeout(function () {
+      if (stale) return;
       el.textContent = '\\u2387';
       el.style.opacity = '0.45';
     }, 5000);
+    fresher(el);
+  };
+
+  // Pages lets the browser keep a page for 10 minutes. If the branch has moved on since this
+  // copy was built, say so, and reload on tap (a new query string skips the browser's copy).
+  var fresher = function (el) {
+    if (!window.fetch) return;
+    fetch(B.base + '/plan.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (plan) {
+      var now = null;
+      plan.projects.forEach(function (p) { p.branches.forEach(function (b) { if (b.path === B.path) now = b.sha; }); });
+      if (!now || now === B.sha) return;
+      stale = true;
+      el.textContent = '\\u2387 ' + B.branch + ': есть версия новее \\u2014 нажмите, чтобы обновить';
+      el.style.opacity = '1';
+      el.style.background = 'rgba(162,70,43,.92)';
+      el.style.pointerEvents = 'auto';
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function () {
+        var u = new URL(location.href);
+        u.searchParams.set('fresh', now.slice(0, 7));
+        location.replace(u.href);
+      });
+    }).catch(function () {});
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', label);
   else label();
