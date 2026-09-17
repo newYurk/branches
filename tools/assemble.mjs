@@ -81,7 +81,7 @@ function renderProject(p) {
   const idle = p.branches.length === 0
   return `
     <section class="project${idle ? ' idle' : ''}" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
-      <h2><span>${esc(p.title)}</span> <a class="main" href="${esc(p.live)}">${esc(p.defaultBranch)} ↗</a></h2>
+      <h2>${esc(p.title)}</h2>
       <p class="tagline${p.error ? ' bad' : ''}">${p.error ? 'репозиторий сейчас не прочитать — его превью убраны' : idle ? 'других веток нет' : esc(p.tagline)}</p>
       <ul>${p.branches.map((b) => renderBranch(p, b)).join('')}
       </ul>
@@ -138,20 +138,7 @@ const html = `<!DOCTYPE html>
       h1 { font-size: clamp(2.4rem, 8vw, 3.2rem); letter-spacing: -0.03em; margin: 0 0 0.4rem; }
       .lede { margin: 0 0 2.4rem; color: var(--stone); font-size: 0.92rem; line-height: 1.5; }
       .project { margin-top: 2.2rem; }
-      h2 {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 1rem;
-        margin: 0;
-        font-size: 1.9rem;
-      }
-      h2 .main {
-        font-family: "IBM Plex Mono", ui-monospace, monospace;
-        font-size: 0.78rem;
-        color: var(--stone);
-        text-decoration: none;
-      }
+      h2 { margin: 0; font-size: 1.9rem; }
       .tagline { margin: 0.1rem 0 0.8rem; font-size: 0.85rem; color: var(--stone); }
       ul { list-style: none; margin: 0; padding: 0; }
       .branch { padding: 0.95rem 0; border-top: 1px solid var(--line); }

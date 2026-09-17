@@ -1,7 +1,7 @@
 # Ветки в работе
 
 **https://newyurk.github.io/branches/** — все ветки игр, которые сейчас в работе, собранные так же,
-как собирается их `main`. Основные адреса (`newyurk.github.io/temari/`, `/rollery/`, `/roti-stand/`) не меняются и по-прежнему отдают `main`: этот репозиторий выкладывает только себя.
+как собирается их `main`. Ссылок на сами игры из `main` на странице нарочно нет — только ветки. Основные адреса (`newyurk.github.io/temari/`, `/rollery/`, `/roti-stand/`) не меняются и по-прежнему отдают `main`: этот репозиторий выкладывает только себя.
 
 Превью ветки живёт по адресу `newyurk.github.io/branches/<игра>/<ветка>/`, например
 `/branches/roti-stand/codex/roti-continuation/prototype/dough-closeup/`. Если в имени ветки есть
@@ -78,7 +78,7 @@ fine-grained токен только на `newYurk/branches` с правом Act
 - Новая игра: скопировать `branch-preview.yml` в её `main` и положить тот же секрет.
 - Обновить сейчас: Actions → publish → Run workflow (галочка «пересобрать» — даже без изменений).
   Это же возвращает к жизни `watch.yml`, если GitHub его выключил.
-- Добавить игру: запись в `projects.json` (`repo`, `title`, `live`, `build`, `entries`, `quiet`).
+- Добавить игру: запись в `projects.json` (`repo`, `title`, `tagline`, `build`, `entries`, `quiet`).
 - Проверить локально:
 
   ```bash

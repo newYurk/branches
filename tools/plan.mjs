@@ -187,7 +187,6 @@ async function full() {
       repo: project.repo,
       title: project.title,
       tagline: project.tagline,
-      live: project.live,
       defaultBranch: remote.defaultBranch ?? 'main',
       error: remote.error ?? null,
       branches: [],
