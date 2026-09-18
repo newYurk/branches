@@ -10,6 +10,10 @@ on:
         description: Пересобрать, даже если ветки не менялись
         type: boolean
         default: false
+      retry:
+        description: Повтор после того, как выкладка не дошла до сайта
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -76,6 +80,7 @@ jobs:
       contents: read
       pages: write
       id-token: write
+      actions: write # ask for one retry when a deploy does not reach the site
     environment:
       name: github-pages
       url: https://newyurk.github.io/branches/
@@ -128,10 +133,14 @@ jobs:
       - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
       # "Deployed" is not the same as "served": wait until the site hands out this run's plan.
-      # Pages caches for up to 10 minutes, so wait a little longer than that.
+      # deploy-pages marks a deployment by commit, and every run between two pushes here carries
+      # the same one, so GitHub sometimes reports success and keeps the previous build
+      # (actions/deploy-pages#383). Then this step fails and the next one asks for a retry.
       - name: site serves this build
+        id: verify
+        continue-on-error: true
         run: |
-          for i in $(seq 1 72); do
+          for i in $(seq 1 30); do
             live=$(curl -fsS --max-time 15 "https://newyurk.github.io/branches/plan.json?run=$GITHUB_RUN_ID-$i" \
               | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).runId))' \
               2>/dev/null || true)
@@ -141,14 +150,28 @@ jobs:
           echo "::error::deploy reported success, but the site still serves run '${live}', not $GITHUB_RUN_ID"
           exit 1
 
+      # One retry, and only one: a retry that fails again is a real problem and stays red.
+      - name: ask for one retry
+        if: steps.verify.outcome == 'failure' && inputs.retry != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "::warning::the deploy did not reach the site; asking for one more run"
+          gh workflow run publish.yml -R "$GITHUB_REPOSITORY" --ref main -f retry=true
+
+      - name: the retry did not reach the site either
+        if: steps.verify.outcome == 'failure' && inputs.retry == true
+        run: exit 1
+
       # A branch that failed to build gets one more try on the next watch (a network hiccup
       # fixes itself); after that the state counts as published until something moves.
       - name: did every branch build
         id: outcome
+        if: steps.verify.outcome == 'success'
         run: echo "all_ok=$(node -p 'Object.values(require("./status.json")).every((s) => s.ok && s.gate !== "later")')" >> "$GITHUB_OUTPUT"
 
       - id: retried
-        if: steps.outcome.outputs.all_ok != 'true'
+        if: steps.verify.outcome == 'success' && steps.outcome.outputs.all_ok != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .published
@@ -157,6 +180,7 @@ jobs:
 
       - name: marker
         id: marker
+        if: steps.verify.outcome == 'success'
         run: |
           mkdir -p .published && echo "${{ steps.plan.outputs.fingerprint }}" > .published/fingerprint
           if [ "${{ steps.outcome.outputs.all_ok }}" = true ] || [ "${{ steps.retried.outputs.cache-hit }}" = true ]; then
@@ -166,6 +190,7 @@ jobs:
           fi
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.verify.outcome == 'success'
         with:
           path: .published
           key: ${{ steps.marker.outputs.key }}
