@@ -126,6 +126,14 @@ jobs:
       - name: listing
         run: node tools/assemble.mjs plan.json _site status.json
 
+      # The overview reads milestones and labels from the GitHub API. It must never take the
+      # branch listing down, so a failure here is reported and the publish goes on without it.
+      - name: overview
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tools/overview.mjs _site
+
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: _site

@@ -173,7 +173,8 @@ const html = `<!DOCTYPE html>
     <main>
       <p class="kicker">ветки в работе</p>
       <h1>newYurk</h1>
-      <p class="lede">Каждая ветка с GitHub, собранная так же, как собирается main. Основные адреса игр не меняются.</p>
+      <p class="lede">Каждая ветка с GitHub, собранная так же, как собирается main. Основные адреса игр не меняются.
+      Где сейчас три игры по вехам и задачам — <a href="overview.html">обзор</a>.</p>
 ${active.length ? '' : '      <p class="empty">Сейчас ни одной ветки, кроме main.</p>'}
 ${[...active, ...idle].map(renderProject).join('\n')}
       <footer>
