@@ -8,6 +8,7 @@
       "repo": "temari",
       "title": "Темари",
       "tagline": "нить на сфере",
+      "live": "https://newyurk.github.io/temari/",
       "build": {
         "install": ["npm ci --no-audit --no-fund"],
         "gate": ["npm test", "npm run typecheck", "node scripts/sync-design.mjs --check"],
@@ -25,6 +26,7 @@
       "repo": "rollery",
       "title": "Ролльня",
       "tagline": "лист → спираль → срез",
+      "live": "https://newyurk.github.io/rollery/",
       "build": { "copy": true },
       "entries": [
         { "path": "play/", "label": "играть" },
@@ -38,6 +40,7 @@
       "repo": "roti-stand",
       "title": "Ротишница",
       "tagline": "стойка роти",
+      "live": "https://newyurk.github.io/roti-stand/",
       "build": { "copy": true },
       "entries": [
         { "path": "prototype/dough-closeup/", "label": "стенд теста" },

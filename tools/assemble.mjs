@@ -1,8 +1,13 @@
-// Finishes the site: static files, the public plan and index.html.
+// Finishes the site: static files, the public plan, index.html and home.html.
 //
 //   node tools/assemble.mjs <plan.json> <site dir> <status.json>
 //
 // A branch whose build failed has no folder in <site dir>; it is still listed, with a link to the log.
+//
+// index.html is the listing at /branches/. It has no links to the games' published sites.
+// home.html is the same listing for the user-site root (https://newyurk.github.io/,
+// repository newYurk.github.io). A <base href="/branches/"> sends its relative links
+// back here, and each game title carries a link to the site published from main.
 
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -77,11 +82,16 @@ function renderBranch(project, b) {
       </li>`
 }
 
-function renderProject(p) {
+function renderProject(p, home) {
   const idle = p.branches.length === 0
+  const live = config.projects.find((item) => item.repo === p.repo)?.live
+  const heading =
+    home && live
+      ? `<span>${esc(p.title)}</span> <a class="main" href="${esc(live)}">${esc(p.defaultBranch)} ↗</a>`
+      : esc(p.title)
   return `
     <section class="project${idle ? ' idle' : ''}" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
-      <h2>${esc(p.title)}</h2>
+      <h2>${heading}</h2>
       <p class="tagline${p.error ? ' bad' : ''}">${p.error ? 'репозиторий сейчас не прочитать — его превью убраны' : idle ? 'других веток нет' : esc(p.tagline)}</p>
       <ul>${p.branches.map((b) => renderBranch(p, b)).join('')}
       </ul>
@@ -91,10 +101,11 @@ function renderProject(p) {
 const active = plan.projects.filter((p) => p.branches.length)
 const idle = plan.projects.filter((p) => !p.branches.length)
 
-const html = `<!DOCTYPE html>
-<html lang="ru">
+function listing(home) {
+  return `<!DOCTYPE html>
+<html lang="ru"${home ? ' data-home="1"' : ''}>
   <head>
-    <meta charset="utf-8" />
+${home ? '    <base href="/branches/" />\n' : ''}    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ветки · newYurk</title>
     <meta name="description" content="Превью веток, над которыми сейчас идёт работа." />
@@ -138,7 +149,20 @@ const html = `<!DOCTYPE html>
       h1 { font-size: clamp(2.4rem, 8vw, 3.2rem); letter-spacing: -0.03em; margin: 0 0 0.4rem; }
       .lede { margin: 0 0 2.4rem; color: var(--stone); font-size: 0.92rem; line-height: 1.5; }
       .project { margin-top: 2.2rem; }
-      h2 { margin: 0; font-size: 1.9rem; }
+      ${home ? `h2 {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        margin: 0;
+        font-size: 1.9rem;
+      }
+      h2 .main {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.78rem;
+        color: var(--stone);
+        text-decoration: none;
+      }` : 'h2 { margin: 0; font-size: 1.9rem; }'}
       .tagline { margin: 0.1rem 0 0.8rem; font-size: 0.85rem; color: var(--stone); }
       ul { list-style: none; margin: 0; padding: 0; }
       .branch { padding: 0.95rem 0; border-top: 1px solid var(--line); }
@@ -176,7 +200,7 @@ const html = `<!DOCTYPE html>
       <p class="lede">Каждая ветка с GitHub, собранная так же, как собирается main. Основные адреса игр не меняются.
       Где сейчас три игры по вехам и задачам — <a href="overview.html">обзор</a>.</p>
 ${active.length ? '' : '      <p class="empty">Сейчас ни одной ветки, кроме main.</p>'}
-${[...active, ...idle].map(renderProject).join('\n')}
+${[...active, ...idle].map((p) => renderProject(p, home)).join('\n')}
       <footer>
         Собрано <time id="built" datetime="${esc(plan.generatedAt)}">${esc(plan.generatedAt.slice(0, 16).replace('T', ' '))} UTC</time>.
         Превью обновляется через пару минут после push; если отстаёт — <a href="${esc(workflowUrl)}">обновить сейчас</a>.<br />
@@ -272,9 +296,11 @@ ${[...active, ...idle].map(renderProject).join('\n')}
   </body>
 </html>
 `
+}
 
 cpSync(new URL('../site/', import.meta.url), siteDir, { recursive: true })
 // runId lets publish.yml tell this deploy from the previous one even when nothing else changed.
 writeFileSync(join(siteDir, 'plan.json'), JSON.stringify({ ...plan, runId: process.env.GITHUB_RUN_ID ?? null, statuses }, null, 2))
-writeFileSync(join(siteDir, 'index.html'), html)
+writeFileSync(join(siteDir, 'index.html'), listing(false))
+writeFileSync(join(siteDir, 'home.html'), listing(true))
 console.error(`index: ${active.length} project(s) with branches, ${idle.length} idle`)
