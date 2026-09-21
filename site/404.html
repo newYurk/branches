@@ -33,8 +33,7 @@
       apply(path.slice(0, -'/branches'.length) + '/branches/')
       } else {
       const first = path.split('/').filter(Boolean)[0]
-      const repoRoots = new Set(['temari', 'rollery', 'roti-stand'])
-      apply(!first || repoRoots.has(first) ? '/' : '/' + first + '/')
+      apply(!first ? '/' : '/' + first + '/')
       }
     </script>
   </body>
