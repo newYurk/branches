@@ -22,14 +22,15 @@
     </main>
     <script>
       const path = location.pathname
-      const at = path.indexOf('/branches/')
+      const lower = path.toLowerCase()
+      const at = lower.indexOf('/branches/')
       const apply = (home) => {
         document.getElementById('home').setAttribute('href', home)
         document.getElementById('icon').setAttribute('href', home + 'favicon.svg')
       }
       if (at >= 0) {
       apply(path.slice(0, at) + '/branches/')
-      } else if (path.endsWith('/branches')) {
+      } else if (lower.endsWith('/branches')) {
       apply(path.slice(0, -'/branches'.length) + '/branches/')
       } else {
       apply('/branches/')
