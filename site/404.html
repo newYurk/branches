@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ветки · нет такой страницы</title>
     <meta name="robots" content="noindex" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link id="icon" rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <style>
       html, body { margin: 0; background: #ece8e1; color: #0c0b09; font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
       main { max-width: 30rem; margin: 0 auto; padding: 4rem 1rem; line-height: 1.5; }
@@ -23,6 +23,7 @@
     <script>
       const home = location.pathname === '/branches' || location.pathname.startsWith('/branches/') ? '/branches/' : '/'
       document.getElementById('home').setAttribute('href', home)
+      document.getElementById('icon').setAttribute('href', home + 'favicon.svg')
     </script>
   </body>
 </html>

@@ -84,7 +84,7 @@ function renderProject(p) {
     <section class="project${idle ? ' idle' : ''}" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
       <h2>${esc(p.title)}</h2>
       <p class="tagline${p.error ? ' bad' : ''}">${p.error ? 'репозиторий сейчас не прочитать — его превью убраны' : idle ? 'других веток нет' : esc(p.tagline)}</p>
-      <p class="main-link"><a href="${esc(mainHref)}">main</a></p>
+      <p class="main-link"><a href="${esc(mainHref)}">${esc(p.defaultBranch)}</a></p>
       <ul>${p.branches.map((b) => renderBranch(p, b)).join('')}
       </ul>
     </section>`
