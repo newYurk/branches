@@ -32,7 +32,8 @@
       } else if (path.endsWith('/branches')) {
       apply(path.slice(0, -'/branches'.length) + '/branches/')
       } else {
-      apply(path.replace(/[^/]*$/, '') || '/')
+      const base = (path.replace(/\/?[^/]*$/, '').replace(/\/$/, '') || '')
+      apply(base + '/branches/')
       }
     </script>
   </body>
