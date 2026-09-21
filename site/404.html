@@ -34,11 +34,14 @@
         document.getElementById('home').setAttribute('href', home)
         document.getElementById('icon').setAttribute('href', home + 'favicon.svg')
       }
-      const probe = (home) => fetch(home + 'plan.json', { cache: 'no-store' }).then((r) => r.ok).catch(() => false)
-      Promise.all(unique.map((home) => probe(home))).then((ok) => {
-        const at = ok.findIndex(Boolean)
-        apply(at >= 0 ? unique[at] : unique[0] || '/')
-      })
+      const probe = (home) =>
+        fetch(home + 'plan.json', { cache: 'no-store', credentials: 'same-origin' }).then((r) => r.ok).catch(() => false)
+      ;(async () => {
+        for (const home of unique) {
+          if (await probe(home)) return apply(home)
+        }
+        apply(unique[0] || '/')
+      })()
     </script>
   </body>
 </html>
