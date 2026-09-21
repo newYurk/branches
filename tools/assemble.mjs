@@ -143,6 +143,8 @@ const html = `<!DOCTYPE html>
       h2 { margin: 0; font-size: 1.9rem; }
       .tagline { margin: 0.1rem 0 0.8rem; font-size: 0.85rem; color: var(--stone); }
       .main-link { margin: -0.4rem 0 0.9rem; font-size: 0.78rem; color: var(--stone); }
+      .main-link a { text-decoration: underline; text-underline-offset: 0.12em; }
+      .main-link a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
       ul { list-style: none; margin: 0; padding: 0; }
       .branch { padding: 0.95rem 0; border-top: 1px solid var(--line); }
       .branch:last-child { border-bottom: 1px solid var(--line); }
