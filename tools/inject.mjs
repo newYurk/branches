@@ -34,6 +34,7 @@ const SHIM = `<script data-branch-preview>(function () {
     if (p === '/branches' || p.indexOf('/branches/') === 0) return '/branches';
     return B.base || '';
   })();
+  var planUrl = location.origin + (base || '') + '/plan.json';
   var NS = 'branch:' + B.path + ':';
   var GONE = '\\u0000removed-in-branch';
 
@@ -173,7 +174,7 @@ const SHIM = `<script data-branch-preview>(function () {
   // copy was built, say so, and reload on tap (a new query string skips the browser's copy).
   var fresher = function (el) {
     if (!window.fetch) return;
-    fetch(base + '/plan.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (plan) {
+    fetch(planUrl, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (plan) {
       var now = null;
       plan.projects.forEach(function (p) { p.branches.forEach(function (b) { if (b.path === B.path) now = b.sha; }); });
       if (!now || now === B.sha) return;
