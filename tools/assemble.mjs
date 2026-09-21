@@ -79,8 +79,7 @@ function renderBranch(project, b) {
 
 function renderProject(p) {
   const idle = p.branches.length === 0
-  const liveHost = `${config.owner.toLowerCase()}.github.io`
-  const mainHref = `https://${liveHost}/${p.repo}/`
+  const mainHref = `https://github.com/${config.owner}/${p.repo}/tree/${p.defaultBranch}`
   return `
     <section class="project${idle ? ' idle' : ''}" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
       <h2>${esc(p.title)}</h2>
