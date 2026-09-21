@@ -79,10 +79,12 @@ function renderBranch(project, b) {
 
 function renderProject(p) {
   const idle = p.branches.length === 0
+  const mainHref = `https://newyurk.github.io/${p.repo}/`
   return `
     <section class="project${idle ? ' idle' : ''}" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
       <h2>${esc(p.title)}</h2>
       <p class="tagline${p.error ? ' bad' : ''}">${p.error ? 'репозиторий сейчас не прочитать — его превью убраны' : idle ? 'других веток нет' : esc(p.tagline)}</p>
+      <p class="main-link"><a href="${esc(mainHref)}">main</a></p>
       <ul>${p.branches.map((b) => renderBranch(p, b)).join('')}
       </ul>
     </section>`
@@ -140,6 +142,8 @@ const html = `<!DOCTYPE html>
       .project { margin-top: 2.2rem; }
       h2 { margin: 0; font-size: 1.9rem; }
       .tagline { margin: 0.1rem 0 0.8rem; font-size: 0.85rem; color: var(--stone); }
+      .main-link { margin: -0.4rem 0 0.9rem; font-size: 0.78rem; color: var(--stone); }
+      .main-link a { text-decoration: none; }
       ul { list-style: none; margin: 0; padding: 0; }
       .branch { padding: 0.95rem 0; border-top: 1px solid var(--line); }
       .branch:last-child { border-bottom: 1px solid var(--line); }
