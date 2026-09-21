@@ -26,9 +26,9 @@
       const candidates = []
       if (at >= 0) candidates.push(path.slice(0, at) + '/branches/')
       if (path.endsWith('/branches')) candidates.push(path.slice(0, -'/branches'.length) + '/branches/')
-      candidates.push('/')
       const first = path.split('/').filter(Boolean)[0]
       if (first) candidates.push('/' + first + '/')
+      candidates.push('/')
       const unique = [...new Set(candidates)]
       const apply = (home) => {
         document.getElementById('home').setAttribute('href', home)
