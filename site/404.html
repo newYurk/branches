@@ -35,7 +35,10 @@
         document.getElementById('icon').setAttribute('href', home + 'favicon.svg')
       }
       const probe = (home) => fetch(home + 'plan.json', { cache: 'no-store' }).then((r) => r.ok).catch(() => false)
-      Promise.any(unique.map(async (home) => ((await probe(home)) ? home : Promise.reject()))).then(apply).catch(() => apply(unique[0] || '/'))
+      Promise.all(unique.map((home) => probe(home))).then((ok) => {
+        const at = ok.findIndex(Boolean)
+        apply(at >= 0 ? unique[at] : unique[0] || '/')
+      })
     </script>
   </body>
 </html>
