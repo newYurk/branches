@@ -23,17 +23,20 @@
     <script>
       const path = location.pathname
       const at = path.indexOf('/branches/')
-      const candidates = []
-      if (at >= 0) candidates.push(path.slice(0, at) + '/branches/')
-      if (path.endsWith('/branches')) candidates.push(path.slice(0, -'/branches'.length) + '/branches/')
-      const first = path.split('/').filter(Boolean)[0]
-      if (first) candidates.push('/' + first + '/')
-      candidates.push('/')
-      const unique = [...new Set(candidates)]
       const apply = (home) => {
         document.getElementById('home').setAttribute('href', home)
         document.getElementById('icon').setAttribute('href', home + 'favicon.svg')
       }
+      if (at >= 0) {
+        apply(path.slice(0, at) + '/branches/')
+      } else if (path.endsWith('/branches')) {
+        apply(path.slice(0, -'/branches'.length) + '/branches/')
+      } else {
+        const candidates = []
+        const first = path.split('/').filter(Boolean)[0]
+        if (first) candidates.push('/' + first + '/')
+        candidates.push('/')
+        const unique = [...new Set(candidates)]
       const probe = (home) =>
         fetch(home + 'plan.json', { cache: 'no-store', credentials: 'same-origin' }).then((r) => r.ok).catch(() => false)
       ;(async () => {
@@ -42,6 +45,7 @@
         }
         apply(unique[0] || '/')
       })()
+      }
     </script>
   </body>
 </html>
