@@ -32,7 +32,10 @@
       } else if (path.endsWith('/branches')) {
       apply(path.slice(0, -'/branches'.length) + '/branches/')
       } else {
-      apply('/branches/')
+      const parts = path.split('/').filter(Boolean)
+      const baseParts = parts.length > 2 ? parts.slice(0, -1) : parts
+      const base = '/' + baseParts.join('/')
+      apply((base === '/' ? '' : base) + '/branches/')
       }
     </script>
   </body>
