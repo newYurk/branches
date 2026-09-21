@@ -37,11 +37,12 @@
         if (first) candidates.push('/' + first + '/')
         candidates.push('/')
         const unique = [...new Set(candidates)]
-      const probe = (home) =>
-        fetch(home + 'plan.json', { cache: 'no-store', credentials: 'same-origin' }).then((r) => r.ok).catch(() => false)
+      const probe = (url) =>
+        fetch(url, { cache: 'no-store', credentials: 'same-origin' }).then((r) => r.ok).catch(() => false)
       ;(async () => {
         for (const home of unique) {
-          if (await probe(home)) return apply(home)
+          if (await probe(home + 'branches/plan.json')) return apply(home + 'branches/')
+          if (await probe(home + 'plan.json')) return apply(home)
         }
         apply(unique[0] || '/')
       })()
