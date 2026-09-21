@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ветки · нет такой страницы</title>
     <meta name="robots" content="noindex" />
-    <link id="icon" rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/branches/favicon.svg" />
     <style>
       html, body { margin: 0; background: #ece8e1; color: #0c0b09; font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
       main { max-width: 30rem; margin: 0 auto; padding: 4rem 1rem; line-height: 1.5; }
@@ -18,23 +18,7 @@
     <main>
       <h1>Такой страницы нет</h1>
       <p>Скорее всего, ветку уже влили или удалили — превью живут, пока жива ветка.</p>
-      <p><a id="home" href="/">Все ветки в работе →</a></p>
+      <p><a href="/branches/">Все ветки в работе →</a></p>
     </main>
-    <script>
-      const path = location.pathname
-      const lower = path.toLowerCase()
-      const at = lower.indexOf('/branches/')
-      const apply = (home) => {
-        document.getElementById('home').setAttribute('href', home)
-        document.getElementById('icon').setAttribute('href', home + 'favicon.svg')
-      }
-      if (at >= 0) {
-      apply(path.slice(0, at) + '/branches/')
-      } else if (lower.endsWith('/branches')) {
-      apply(path.slice(0, -'/branches'.length) + '/branches/')
-      } else {
-      apply('/')
-      }
-    </script>
   </body>
 </html>
