@@ -21,7 +21,11 @@
       <p><a id="home" href="/">Все ветки в работе →</a></p>
     </main>
     <script>
-      const home = location.pathname === '/branches' || location.pathname.startsWith('/branches/') ? '/branches/' : '/'
+      const path = location.pathname
+      const at = path.indexOf('/branches/')
+      const home =
+        at >= 0 ? path.slice(0, at) + '/branches/' :
+        path.endsWith('/branches') ? path.slice(0, -'/branches'.length) + '/branches/' : '/'
       document.getElementById('home').setAttribute('href', home)
       document.getElementById('icon').setAttribute('href', home + 'favicon.svg')
     </script>

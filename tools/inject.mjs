@@ -34,7 +34,6 @@ const SHIM = `<script data-branch-preview>(function () {
     var marker = '/' + B.path + '/';
     var at = p.indexOf(marker);
     if (at >= 0) return p.slice(0, at);
-    if (p === '/branches' || p.indexOf('/branches/') === 0) return '/branches';
     return B.base || '';
   })();
   var planUrl = location.origin + (base || '') + '/plan.json';
