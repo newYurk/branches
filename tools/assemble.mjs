@@ -4,10 +4,10 @@
 //
 // A branch whose build failed has no folder in <site dir>; it is still listed, with a link to the log.
 //
-// index.html is the listing at /branches/. It has no links to the games' published sites.
-// home.html is the same listing for the user-site root (https://newyurk.github.io/,
-// repository newYurk.github.io). A <base href="/branches/"> sends its relative links
-// back here, and each game title carries a link to the site published from main.
+// index.html (the listing at /branches/) and home.html (fetched by the user-site root,
+// https://newyurk.github.io/, repository newYurk.github.io) are the same page by construction:
+// the owner wants both addresses to look identical. A <base href="/branches/"> sends its relative
+// links back here, and each game title carries a link to the site published from main.
 
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -371,6 +371,7 @@ ${plan.projects.map((p) => renderProject(p, home)).join('\n')}
 cpSync(new URL('../site/', import.meta.url), siteDir, { recursive: true })
 // runId lets publish.yml tell this deploy from the previous one even when nothing else changed.
 writeFileSync(join(siteDir, 'plan.json'), JSON.stringify({ ...plan, runId: process.env.GITHUB_RUN_ID ?? null, statuses }, null, 2))
-writeFileSync(join(siteDir, 'index.html'), listing(false))
-writeFileSync(join(siteDir, 'home.html'), listing(true))
+const page = listing(true)
+writeFileSync(join(siteDir, 'index.html'), page)
+writeFileSync(join(siteDir, 'home.html'), page)
 console.error(`index: ${active.length} project(s) with branches, ${plan.projects.length - active.length} idle (order = projects.json)`)
