@@ -137,6 +137,28 @@ async function heads() {
   return { fingerprint, repos, builder: builderVersion() }
 }
 
+
+// Tip of the default branch (main), even when a game has no feature branches.
+async function tipOf(repo, defaultBranch, head) {
+  const tip = {
+    sha: head?.sha ?? null,
+    subject: '',
+    committedAt: null,
+    url: head?.sha
+      ? `https://github.com/${OWNER}/${repo}/commit/${head.sha}`
+      : `https://github.com/${OWNER}/${repo}/tree/${urlBranch(defaultBranch)}`,
+  }
+  if (!head?.sha) return tip
+  try {
+    const commit = await api(`/repos/${OWNER}/${repo}/commits/${head.sha}`)
+    tip.subject = commit.commit.message.split('\n')[0]
+    tip.committedAt = commit.commit.committer.date
+  } catch (err) {
+    console.error(`::warning::${repo} ${defaultBranch}: ${err.message}`)
+  }
+  return tip
+}
+
 async function describe(project, defaultBranch, head, pulls) {
   const branch = {
     branch: head.branch,
@@ -193,6 +215,9 @@ async function full() {
     }
     plan.projects.push(entry)
     if (remote.error) continue
+
+    const defaultHead = remote.heads.find((h) => h.branch === remote.defaultBranch)
+    entry.main = await tipOf(project.repo, remote.defaultBranch, defaultHead)
 
     for (const head of remote.heads) {
       if (head.branch === remote.defaultBranch) continue

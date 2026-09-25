@@ -82,6 +82,23 @@ function renderBranch(project, b) {
       </li>`
 }
 
+function renderMainTip(p) {
+  const m = p.main
+  if (!m?.sha) return ''
+  const meta = [
+    m.committedAt
+      ? `<time datetime="${esc(m.committedAt)}">${esc(m.committedAt.slice(0, 16).replace('T', ' '))}</time>`
+      : null,
+    `<a href="${esc(m.url)}"><code>${esc(m.sha.slice(0, 7))}</code></a>`,
+  ].filter(Boolean)
+  return `
+      <p class="main-tip">
+        <span class="label">${esc(p.defaultBranch)}</span>${
+          m.subject ? `<span class="subject-inline">${esc(m.subject)}</span>` : ''
+        }<span class="when">${meta.join('<span class="dot">·</span>')}</span>
+      </p>`
+}
+
 function renderProject(p, home) {
   const idle = p.branches.length === 0
   const live = config.projects.find((item) => item.repo === p.repo)?.live
@@ -93,7 +110,7 @@ function renderProject(p, home) {
     <section class="project${idle ? ' idle' : ''}" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
       <h2>${heading}</h2>
       <p class="tagline${p.error ? ' bad' : ''}">${p.error ? 'репозиторий сейчас не прочитать — его превью убраны' : idle ? 'других веток нет' : esc(p.tagline)}</p>
-      <ul>${p.branches.map((b) => renderBranch(p, b)).join('')}
+${renderMainTip(p)}      <ul>${p.branches.map((b) => renderBranch(p, b)).join('')}
       </ul>
     </section>`
 }
@@ -189,8 +206,28 @@ ${home ? '    <base href="/branches/" />\n' : ''}    <meta charset="utf-8" />
       .empty { margin-top: 2.2rem; color: var(--stone); font-size: 0.9rem; }
       .idle { margin-top: 1.2rem; }
       .idle h2 { font-size: 1.35rem; color: var(--stone); }
-      .idle .tagline { margin-bottom: 0; }
+      .idle .tagline { margin-bottom: 0.35rem; }
+      .main-tip {
+        margin: 0.15rem 0 0.75rem;
+        font-size: 0.78rem;
+        color: var(--stone);
+        line-height: 1.5;
+      }
+      .main-tip .label {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        color: var(--ink);
+        margin-right: 0.55em;
+      }
+      .idle .main-tip .label { color: var(--stone); }
+      .main-tip .subject-inline {
+        margin-right: 0.55em;
+        color: var(--ink);
+      }
+      .idle .main-tip .subject-inline { color: var(--stone); }
+      .main-tip a { text-decoration: none; }
+      .main-tip code { font-family: "IBM Plex Mono", ui-monospace, monospace; }
       footer { margin-top: 2.6rem; font-size: 0.78rem; color: var(--stone); line-height: 1.6; }
+      #building a { color: inherit; }
     </style>
   </head>
   <body>
@@ -203,13 +240,15 @@ ${active.length ? '' : '      <p class="empty">Сейчас ни одной ве
 ${plan.projects.map((p) => renderProject(p, home)).join('\n')}
       <footer>
         Собрано <time id="built" datetime="${esc(plan.generatedAt)}">${esc(plan.generatedAt.slice(0, 16).replace('T', ' '))} UTC</time>.
-        Превью обновляется через пару минут после push; если отстаёт — <a href="${esc(workflowUrl)}">обновить сейчас</a>.<br />
+        Превью обновляется через пару минут после push; если отстаёт — <a href="${esc(workflowUrl)}">обновить сейчас</a>.
+        <span id="building"><br />Проверяю, что сейчас собирается…</span><br />
         Ветки, которые не запушены на GitHub, здесь не видны.
         <span id="stale" class="note bad" hidden><br />Новые коммиты ждут дольше ${STALE_MINUTES} минут — похоже, автопроверка стоит. <a href="${esc(workflowUrl)}">Запустить publish вручную</a>.</span>
       </footer>
     </main>
     <script type="module">
       const OWNER = ${JSON.stringify(config.owner)}
+      const SITE = ${JSON.stringify(config.site)}
       const BUILT_RUN = ${JSON.stringify(process.env.GITHUB_RUN_ID ?? null)}
 
       // Pages lets the browser keep this page for 10 minutes; if a newer build is out, load it.
@@ -233,6 +272,37 @@ ${plan.projects.map((p) => renderProject(p, home)).join('\n')}
         return 'только что'
       }
       for (const t of document.querySelectorAll('time')) t.textContent = ago(t.dateTime)
+
+      const escText = (s) =>
+        String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+
+      // Live Actions status for the listing builder (publish.yml).
+      const buildingEl = document.getElementById('building')
+      async function refreshBuilding() {
+        if (!buildingEl) return
+        try {
+          const [running, queued] = await Promise.all([
+            api(\`/repos/\${OWNER}/\${SITE}/actions/runs?status=in_progress&per_page=10\`),
+            api(\`/repos/\${OWNER}/\${SITE}/actions/runs?status=queued&per_page=10\`),
+          ])
+          const runs = [...(running.workflow_runs ?? []), ...(queued.workflow_runs ?? [])].filter(
+            (r) => (r.path && r.path.includes('publish.yml')) || r.name === 'publish',
+          )
+          if (!runs.length) {
+            buildingEl.innerHTML = '<br />Сейчас ничего не собирается.'
+            return
+          }
+          const r = runs[0]
+          const label = escText(r.display_title || r.name || 'publish')
+          const when = r.updated_at || r.created_at
+          const agoBit = when ? \` · \${ago(when)}\` : ''
+          buildingEl.innerHTML = \`<br />Сейчас собирается: <a href="\${escText(r.html_url)}">\${label}</a>\${agoBit}.\`
+        } catch {
+          buildingEl.innerHTML = '<br />Статус сборки сейчас не прочитать.'
+        }
+      }
+      refreshBuilding()
+      setInterval(refreshBuilding, 60_000)
 
       // Previews keep their saves under "branch:<repo>/<branch>:" (see tools/inject.mjs).
       // Once a branch is gone from GitHub its saves are dead weight in the shared 5 MB.
