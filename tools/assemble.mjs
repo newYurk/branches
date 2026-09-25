@@ -99,7 +99,7 @@ function renderProject(p, home) {
 }
 
 const active = plan.projects.filter((p) => p.branches.length)
-const idle = plan.projects.filter((p) => !p.branches.length)
+// Project order follows projects.json (via plan.projects), including idle repos with only main.
 
 function listing(home) {
   return `<!DOCTYPE html>
@@ -198,9 +198,9 @@ ${home ? '    <base href="/branches/" />\n' : ''}    <meta charset="utf-8" />
       <p class="kicker">ветки в работе</p>
       <h1>newYurk</h1>
       <p class="lede">Каждая ветка с GitHub, собранная так же, как собирается main. Основные адреса игр не меняются.
-      Где сейчас три игры по вехам и задачам — <a href="overview.html">обзор</a>.</p>
+      Где сейчас проекты по вехам и задачам — <a href="overview.html">обзор</a>.</p>
 ${active.length ? '' : '      <p class="empty">Сейчас ни одной ветки, кроме main.</p>'}
-${[...active, ...idle].map((p) => renderProject(p, home)).join('\n')}
+${plan.projects.map((p) => renderProject(p, home)).join('\n')}
       <footer>
         Собрано <time id="built" datetime="${esc(plan.generatedAt)}">${esc(plan.generatedAt.slice(0, 16).replace('T', ' '))} UTC</time>.
         Превью обновляется через пару минут после push; если отстаёт — <a href="${esc(workflowUrl)}">обновить сейчас</a>.<br />
@@ -303,4 +303,4 @@ cpSync(new URL('../site/', import.meta.url), siteDir, { recursive: true })
 writeFileSync(join(siteDir, 'plan.json'), JSON.stringify({ ...plan, runId: process.env.GITHUB_RUN_ID ?? null, statuses }, null, 2))
 writeFileSync(join(siteDir, 'index.html'), listing(false))
 writeFileSync(join(siteDir, 'home.html'), listing(true))
-console.error(`index: ${active.length} project(s) with branches, ${idle.length} idle`)
+console.error(`index: ${active.length} project(s) with branches, ${plan.projects.length - active.length} idle (order = projects.json)`)
