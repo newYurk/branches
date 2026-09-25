@@ -27,6 +27,20 @@ const esc = (s) =>
 
 const statusOf = (branch) => statuses[branch.path] ?? { ok: false, gate: null, reason: null, log: runUrl }
 
+// A game's entries are main and its branches, each with the time of its last commit. Only the
+// newest one is shown in dark type; the older ones are dimmed to the grey of the secondary text.
+// A tie goes to the earlier entry (main comes first); an entry without a time loses to any with one.
+// Self-contained on purpose: the listing page runs this very function again after its live check.
+function newestOf(times) {
+  let best = 0
+  let bestAt = -Infinity
+  times.forEach((time, i) => {
+    const at = Date.parse(time ?? '')
+    if (at > bestAt) (best = i), (bestAt = at)
+  })
+  return best
+}
+
 function entriesFor(project, branch) {
   const cfg = config.projects.find((p) => p.repo === project.repo)
   return (cfg.entries ?? [{ path: '', label: 'открыть' }]).filter((e) => {
@@ -44,7 +58,7 @@ function compared(b, main) {
   return null
 }
 
-function renderBranch(project, b) {
+function renderBranch(project, b, older) {
   const status = statusOf(b)
   const entries = status.ok ? entriesFor(project, b) : []
   const href = entries.length ? `./${b.path}/${entries[0].path}` : null
@@ -72,7 +86,7 @@ function renderBranch(project, b) {
   const more = entries.length > 1 ? entries.map((e) => `<a href="./${esc(b.path)}/${esc(e.path)}">${esc(e.label)}</a>`) : []
 
   return `
-      <li class="branch${b.changed === 'game' ? '' : ' quiet'}" data-repo="${esc(project.repo)}" data-branch="${esc(b.branch)}" data-sha="${esc(b.sha)}" data-path="${esc(b.path)}">
+      <li class="branch${older ? ' older' : ''}" data-repo="${esc(project.repo)}" data-branch="${esc(b.branch)}" data-sha="${esc(b.sha)}" data-path="${esc(b.path)}" data-at="${esc(b.committedAt)}">
         ${href ? `<a class="name" href="${esc(href)}">${esc(b.branch)}</a>` : `<span class="name">${esc(b.branch)}</span>`}
         ${b.subject ? `<p class="subject">${esc(b.subject.replace(`[${b.branch}] `, ''))}</p>` : ''}
         <p class="meta">${meta.join('<span class="dot">·</span>')}</p>
@@ -82,7 +96,7 @@ function renderBranch(project, b) {
       </li>`
 }
 
-function renderMainTip(p) {
+function renderMainTip(p, older) {
   const m = p.main
   if (!m?.sha) return ''
   const meta = [
@@ -92,25 +106,30 @@ function renderMainTip(p) {
     `<a href="${esc(m.url)}"><code>${esc(m.sha.slice(0, 7))}</code></a>`,
   ].filter(Boolean)
   return `
-      <p class="main-tip">
+      <p class="main-tip${older ? ' older' : ''}" data-sha="${esc(m.sha)}" data-at="${esc(m.committedAt)}">
         <span class="label">${esc(p.defaultBranch)}</span>${
           m.subject ? `<span class="subject-inline">${esc(m.subject)}</span>` : ''
         }<span class="when">${meta.join('<span class="dot">·</span>')}</span>
+        <span class="live" hidden></span>
       </p>`
 }
 
 function renderProject(p, home) {
+  // A game without branches looks like any other; only its tagline says so.
   const idle = p.branches.length === 0
+  // Entries in page order: main (when its tip is known), then the branches.
+  const first = p.main?.sha ? 1 : 0
+  const newest = newestOf([...(first ? [p.main.committedAt] : []), ...p.branches.map((b) => b.committedAt)])
   const live = config.projects.find((item) => item.repo === p.repo)?.live
   const heading =
     home && live
       ? `<span>${esc(p.title)}</span> <a class="main" href="${esc(live)}">${esc(p.defaultBranch)} ↗</a>`
       : esc(p.title)
   return `
-    <section class="project${idle ? ' idle' : ''}" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
+    <section class="project" data-repo="${esc(p.repo)}" data-default="${esc(p.defaultBranch)}">
       <h2>${heading}</h2>
       <p class="tagline${p.error ? ' bad' : ''}">${p.error ? 'репозиторий сейчас не прочитать — его превью убраны' : idle ? 'других веток нет' : esc(p.tagline)}</p>
-${renderMainTip(p)}      <ul>${p.branches.map((b) => renderBranch(p, b)).join('')}
+${renderMainTip(p, newest !== 0)}      <ul>${p.branches.map((b, i) => renderBranch(p, b, newest !== first + i)).join('')}
       </ul>
     </section>`
 }
@@ -202,11 +221,7 @@ ${home ? '    <base href="/branches/" />\n' : ''}    <meta charset="utf-8" />
       .note { display: inline-block; margin-right: 0.8em; }
       .note.bad, .live.bad, .tagline.bad { color: var(--rust); }
       .live.fresh { color: var(--moss); }
-      .quiet .name, .quiet .subject { color: var(--stone); }
       .empty { margin-top: 2.2rem; color: var(--stone); font-size: 0.9rem; }
-      .idle { margin-top: 1.2rem; }
-      .idle h2 { font-size: 1.35rem; color: var(--stone); }
-      .idle .tagline { margin-bottom: 0.35rem; }
       .main-tip {
         margin: 0.15rem 0 0.75rem;
         font-size: 0.78rem;
@@ -218,14 +233,15 @@ ${home ? '    <base href="/branches/" />\n' : ''}    <meta charset="utf-8" />
         color: var(--ink);
         margin-right: 0.55em;
       }
-      .idle .main-tip .label { color: var(--stone); }
       .main-tip .subject-inline {
         margin-right: 0.55em;
         color: var(--ink);
       }
-      .idle .main-tip .subject-inline { color: var(--stone); }
       .main-tip a { text-decoration: none; }
       .main-tip code { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      .main-tip .live { display: block; margin: 0.1rem 0 0; }
+      /* In each game only the newest entry (main or a branch, by last commit) stays dark. */
+      .older .name, .older .subject, .older .label, .older .subject-inline { color: var(--stone); }
       footer { margin-top: 2.6rem; font-size: 0.78rem; color: var(--stone); line-height: 1.6; }
       #building a { color: inherit; }
     </style>
@@ -310,6 +326,17 @@ ${plan.projects.map((p) => renderProject(p, home)).join('\n')}
       const checked = new Set()
       const lagging = []
 
+      // Last commit time of a head this build has not seen: the same field tools/plan.mjs reads.
+      const committedAt = (repo, sha) =>
+        api(\`/repos/\${OWNER}/\${repo}/commits/\${sha}\`).then((c) => c.commit.committer.date, () => null)
+      ${newestOf}
+      function markNewest(section) {
+        const entries = [...section.querySelectorAll('.main-tip, .branch')]
+        const newest = newestOf(entries.map((el) => el.dataset.at))
+        entries.forEach((el, i) => el.classList.toggle('older', i !== newest))
+        return entries.length
+      }
+
       // Built pages lag behind pushes by a few minutes; say so instead of pretending.
       for (const section of document.querySelectorAll('.project')) {
         const repo = section.dataset.repo
@@ -325,24 +352,48 @@ ${plan.projects.map((p) => renderProject(p, home)).join('\n')}
         }
         checked.add(repo)
         for (const name of heads.keys()) alive.add(await pathFor(repo, name))
+        // A push since this build moves an entry's time to its new commit, and the dark entry may move with it.
+        const tip = section.querySelector('.main-tip')
+        const mainSha = heads.get(section.dataset.default)
+        const mainMoved = Boolean(tip && mainSha && mainSha !== tip.dataset.sha)
+        const mainAt = mainMoved ? await committedAt(repo, mainSha) : null
+        if (mainAt) tip.dataset.at = mainAt
         const shown = new Set()
         for (const li of section.querySelectorAll('.branch')) {
           shown.add(li.dataset.branch)
           const live = li.querySelector('.live')
           const sha = heads.get(li.dataset.branch)
-          if (!sha) Object.assign(live, { hidden: false, className: 'live bad', textContent: 'ветку уже удалили' })
-          else if (sha !== li.dataset.sha && lagging.push([repo, li.dataset.branch]))
+          if (!sha) {
+            // A deleted branch has no last commit any more, so it is never the newest entry.
+            delete li.dataset.at
+            Object.assign(live, { hidden: false, className: 'live bad', textContent: 'ветку уже удалили' })
+          } else if (sha !== li.dataset.sha) {
+            lagging.push([repo, li.dataset.branch])
             Object.assign(live, { hidden: false, className: 'live fresh', textContent: \`есть новые коммиты (\${sha.slice(0, 7)}) — превью догонит через несколько минут\` })
+            const at = await committedAt(repo, sha)
+            if (at) li.dataset.at = at
+          }
         }
-        for (const name of heads.keys()) {
+        for (const [name, sha] of heads) {
           if (name === section.dataset.default || shown.has(name)) continue
           const li = document.createElement('li')
-          li.className = 'branch quiet'
+          li.className = 'branch'
           li.innerHTML = '<span class="name"></span><p class="live fresh">новая ветка — превью готовится</p>'
           li.querySelector('.name').textContent = name
+          const at = await committedAt(repo, sha)
+          if (at) li.dataset.at = at
           section.querySelector('ul').append(li)
           lagging.push([repo, name])
         }
+        // A moved main gets a plain note, never a promise and never the stuck warning. Every publish run
+        // re-reads all the games, but runs start only from branch-preview.yml in a game (push, branch
+        // deletion, pull request), a push here, a manual run, publish.yml's own retry, or the scheduled
+        // watch.yml that GitHub runs hours apart, so the main of a game without branch-preview.yml
+        // (temari-sim) can wait hours for the listing. The note shows whenever main moved and the game has
+        // more than one entry, dark or grey; it explains a dark main whose line still shows an older commit.
+        // A game whose only entry is main needs none.
+        if (markNewest(section) > 1 && mainMoved)
+          Object.assign(tip.querySelector('.live'), { hidden: false, className: 'live', textContent: \`есть новые коммиты (\${mainSha.slice(0, 7)}\${mainAt ? ', ' + ago(mainAt) : ''})\` })
       }
 
       // The watcher is stuck if a push is older than ${STALE_MINUTES} minutes and still not built.

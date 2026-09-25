@@ -70,7 +70,7 @@ async function api(path) {
 
 // Does this branch change anything a player would see? `quiet` globs from projects.json name
 // the paths that never reach the page (notes, simulations, CI). A branch that touches nothing
-// else is shown dimmed as "только доки".
+// else is marked "только доки".
 export function whatChanged(files, quiet) {
   const matchers = quiet.map(globToRegExp)
   if (files.length === 0) return 'same'
