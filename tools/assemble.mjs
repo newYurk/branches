@@ -111,6 +111,7 @@ function renderMainTip(p, older) {
           m.subject ? `<span class="subject-inline">${esc(m.subject)}</span>` : ''
         }<span class="when">${meta.join('<span class="dot">·</span>')}</span>
         <span class="live" hidden></span>
+        <span class="live site" hidden></span>
       </p>`
 }
 
@@ -239,7 +240,7 @@ ${home ? '    <base href="/branches/" />\n' : ''}    <meta charset="utf-8" />
       }
       .main-tip a { text-decoration: none; }
       .main-tip code { font-family: "IBM Plex Mono", ui-monospace, monospace; }
-      .main-tip .live { display: block; margin: 0.1rem 0 0; }
+      .main-tip .live, .main-tip .live.site { display: block; margin: 0.1rem 0 0; }
       /* In each game only the newest entry (main or a branch, by last commit) stays dark. */
       .older .name, .older .subject, .older .label, .older .subject-inline { color: var(--stone); }
       footer { margin-top: 2.6rem; font-size: 0.78rem; color: var(--stone); line-height: 1.6; }
@@ -355,6 +356,7 @@ ${plan.projects.map((p) => renderProject(p, home)).join('\n')}
         // A push since this build moves an entry's time to its new commit, and the dark entry may move with it.
         const tip = section.querySelector('.main-tip')
         const mainSha = heads.get(section.dataset.default)
+        if (mainSha) section.dataset.mainSha = mainSha
         const mainMoved = Boolean(tip && mainSha && mainSha !== tip.dataset.sha)
         const mainAt = mainMoved ? await committedAt(repo, mainSha) : null
         if (mainAt) tip.dataset.at = mainAt
@@ -395,6 +397,83 @@ ${plan.projects.map((p) => renderProject(p, home)).join('\n')}
         if (markNewest(section) > 1 && mainMoved)
           Object.assign(tip.querySelector('.live'), { hidden: false, className: 'live', textContent: \`есть новые коммиты (\${mainSha.slice(0, 7)}\${mainAt ? ', ' + ago(mainAt) : ''})\` })
       }
+
+      // Live status of each game's own GitHub Pages deploy (pages.yml in the game repo).
+      const pagesCache = new Map()
+      const SITE_REFRESH_MS = 120_000
+      let siteRefreshBusy = false
+      async function applySiteStatus(section) {
+        const tip = section.querySelector('.main-tip')
+        const siteEl = tip?.querySelector('.live.site')
+        if (!siteEl) return 0
+        const repo = section.dataset.repo
+        const mainSha = section.dataset.mainSha || tip.dataset.sha
+        if (!mainSha) return 0
+        if (pagesCache.get(repo) === false) return 0
+        try {
+          const data = await api(\`/repos/\${OWNER}/\${repo}/actions/workflows/pages.yml/runs?per_page=15\`)
+          pagesCache.set(repo, true)
+          const list = data.workflow_runs ?? []
+          const active = list.find((r) => r.status === 'in_progress' || r.status === 'queued')
+          if (active) {
+            const sha7 = (active.head_sha || mainSha).slice(0, 7)
+            Object.assign(siteEl, {
+              hidden: false,
+              className: 'live site fresh',
+              textContent: \`сайт собирается (\${sha7}) — догонит через пару минут\`,
+            })
+            return 1
+          }
+          const lastOk = list.find((r) => r.conclusion === 'success')
+          if (!lastOk || lastOk.head_sha !== mainSha) {
+            const sha7 = mainSha.slice(0, 7)
+            const mainAt = tip.dataset.at
+            const agoBit = mainAt ? \`, \${ago(mainAt)}\` : ''
+            Object.assign(siteEl, {
+              hidden: false,
+              className: 'live site fresh',
+              textContent: \`есть новые коммиты (\${sha7}\${agoBit}) — сборка сайта ещё не началась\`,
+            })
+            return 1
+          }
+          const sha7 = mainSha.slice(0, 7)
+          Object.assign(siteEl, {
+            hidden: false,
+            className: 'live site',
+            textContent: \`сайт на последнем коммите (\${sha7})\`,
+          })
+          return 1
+        } catch (status) {
+          if (status === 404) {
+            pagesCache.set(repo, false)
+            siteEl.hidden = true
+            return 1
+          }
+          if ((status === 403 || status === 429) && pagesCache.get(repo) !== true) {
+            siteEl.hidden = true
+            return 1
+          }
+          Object.assign(siteEl, {
+            hidden: false,
+            className: 'live site',
+            textContent: 'статус сайта сейчас не прочитать',
+          })
+          return 1
+        }
+      }
+      async function refreshSiteStatuses() {
+        if (siteRefreshBusy) return
+        siteRefreshBusy = true
+        let calls = 0
+        try {
+          for (const section of document.querySelectorAll('.project')) calls += await applySiteStatus(section)
+          window.__branchesSiteApiCalls = (window.__branchesSiteApiCalls ?? 0) + calls
+        } finally {
+          siteRefreshBusy = false
+        }
+      }
+      await refreshSiteStatuses()
+      setInterval(refreshSiteStatuses, SITE_REFRESH_MS)
 
       // The watcher is stuck if a push is older than ${STALE_MINUTES} minutes and still not built.
       // The push time comes from the repository activity feed, not from the commit date.
